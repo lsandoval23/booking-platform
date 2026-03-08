@@ -1,5 +1,63 @@
 # 🚀 Implementation Plan - Resource Booking Platform Monorepo
 
+## 🏛️ Architecture Approach: Isolated Models (Approach 2)
+
+This implementation plan follows the **Isolated Model Architecture** (Approach 2 from [`shared-vs-isolated-models.md`](Q&A/shared-vs-isolated-models.md)), which provides the best balance between service autonomy and development efficiency.
+
+### Core Principles
+
+**What We Share:**
+- ✅ **API Contracts** (`shared/api-contracts`): DTOs for inter-service communication
+- ✅ **Event Schemas** (`shared/event-schemas`): Event definitions for async messaging
+- ✅ **Common Utilities** (`shared/common-utils`): JWT, validation, date utilities
+
+**What We DON'T Share:**
+- ❌ **Domain Models**: Each service owns its entities with business logic
+- ❌ **Database Entities**: Each service manages its own persistence layer
+- ❌ **Business Logic**: Service-specific rules remain isolated
+
+### Benefits of This Approach
+
+1. **Service Autonomy**: Each service can evolve its domain model independently
+2. **Clear Boundaries**: Services communicate via DTOs, not shared domain objects
+3. **Type Safety**: Shared contracts prevent integration errors at compile time
+4. **Independent Deployment**: Domain model changes don't cascade to other services
+5. **Bounded Contexts**: Each service's model reflects its specific needs
+
+### Communication Patterns
+
+- **Synchronous**: REST APIs using DTOs from `shared/api-contracts`
+- **Asynchronous**: Events using schemas from `shared/event-schemas`
+- **Data References**: Services store IDs (foreign keys), not full objects
+
+### Example: Booking Service
+
+```java
+// Internal domain model (NOT shared)
+@Entity
+public class Booking {
+    @Id private UUID id;
+    private UUID userId;        // Reference only
+    private UUID resourceId;    // Reference only
+    // ... business logic
+}
+
+// API communication (shared DTO)
+public BookingDTO createBooking(CreateBookingRequest request) {
+    // Validate via API calls
+    UserDTO user = userClient.getUser(request.userId());
+    ResourceDTO resource = resourceClient.getResource(request.resourceId());
+    
+    // Create internal model
+    Booking booking = new Booking(request.userId(), request.resourceId());
+    
+    // Return DTO
+    return booking.toDTO();
+}
+```
+
+---
+
 ## 📁 Repository Structure
 
 ```
@@ -46,22 +104,32 @@ booking-platform/                           # Root monorepo
 │   └── cleanup.sh                          # Cleanup resources
 │
 ├── shared/                                 # Shared libraries
-│   ├── common-models/                      # Shared data models
-│   │   ├── src/
+│   ├── api-contracts/                      # API contracts (DTOs)
+│   │   ├── src/main/java/com/booking/contracts/
+│   │   │   ├── user/
+│   │   │   ├── resource/
+│   │   │   ├── booking/
+│   │   │   └── payment/
 │   │   ├── pom.xml
 │   │   └── README.md
-│   ├── common-utils/                       # Shared utilities
-│   │   ├── src/
+│   ├── event-schemas/                      # Event definitions
+│   │   ├── src/main/java/com/booking/events/
 │   │   ├── pom.xml
 │   │   └── README.md
-│   └── event-schemas/                      # Event definitions
-│       ├── booking-events.json
-│       ├── payment-events.json
+│   └── common-utils/                       # Shared utilities only
+│       ├── src/main/java/com/booking/utils/
+│       ├── pom.xml
 │       └── README.md
 │
 ├── services/                               # Microservices
 │   ├── auth-service/                       # Authentication service
-│   │   ├── src/
+│   │   ├── src/main/java/com/booking/auth/
+│   │   │   ├── domain/                     # Internal domain models
+│   │   │   │   ├── User.java
+│   │   │   │   └── RefreshToken.java
+│   │   │   ├── repository/
+│   │   │   ├── service/
+│   │   │   └── controller/                 # Uses DTOs from api-contracts
 │   │   ├── pom.xml
 │   │   ├── Dockerfile
 │   │   ├── docker-compose.yml              # Isolated testing
@@ -69,7 +137,13 @@ booking-platform/                           # Root monorepo
 │   │   └── README.md
 │   │
 │   ├── user-service/                       # User management service
-│   │   ├── src/
+│   │   ├── src/main/java/com/booking/user/
+│   │   │   ├── domain/                     # Internal domain models
+│   │   │   │   ├── UserProfile.java
+│   │   │   │   └── UserPreferences.java
+│   │   │   ├── repository/
+│   │   │   ├── service/
+│   │   │   └── controller/
 │   │   ├── pom.xml
 │   │   ├── Dockerfile
 │   │   ├── docker-compose.yml
@@ -77,7 +151,14 @@ booking-platform/                           # Root monorepo
 │   │   └── README.md
 │   │
 │   ├── resource-service/                   # Resource management service
-│   │   ├── src/
+│   │   ├── src/main/java/com/booking/resource/
+│   │   │   ├── domain/                     # Internal domain models
+│   │   │   │   ├── Resource.java
+│   │   │   │   ├── Availability.java
+│   │   │   │   └── ResourceType.java
+│   │   │   ├── repository/
+│   │   │   ├── service/
+│   │   │   └── controller/
 │   │   ├── pom.xml
 │   │   ├── Dockerfile
 │   │   ├── docker-compose.yml
@@ -85,7 +166,16 @@ booking-platform/                           # Root monorepo
 │   │   └── README.md
 │   │
 │   ├── booking-service/                    # Booking management service
-│   │   ├── src/
+│   │   ├── src/main/java/com/booking/booking/
+│   │   │   ├── domain/                     # Internal domain models
+│   │   │   │   ├── Booking.java
+│   │   │   │   └── BookingStatus.java
+│   │   │   ├── client/                     # REST clients for other services
+│   │   │   │   ├── UserServiceClient.java
+│   │   │   │   └── ResourceServiceClient.java
+│   │   │   ├── repository/
+│   │   │   ├── service/
+│   │   │   └── controller/
 │   │   ├── pom.xml
 │   │   ├── Dockerfile
 │   │   ├── docker-compose.yml
@@ -93,7 +183,16 @@ booking-platform/                           # Root monorepo
 │   │   └── README.md
 │   │
 │   └── payment-service/                    # Payment processing service
-│       ├── src/
+│       ├── src/main/java/com/booking/payment/
+│       │   ├── domain/                     # Internal domain models
+│       │   │   ├── Payment.java
+│       │   │   ├── PaymentStatus.java
+│       │   │   └── PaymentMethod.java
+│       │   ├── client/                     # REST clients
+│       │   │   └── BookingServiceClient.java
+│       │   ├── repository/
+│       │   ├── service/
+│       │   └── controller/
 │       ├── pom.xml
 │       ├── Dockerfile
 │       ├── docker-compose.yml
@@ -954,15 +1053,27 @@ git branch feature/user-service
 - ✅ .gitignore configured
 - ✅ .env.example files
 
-#### Step 1.2: Shared Libraries
+#### Step 1.2: Shared Libraries (Isolated Model Approach)
 **Order**:
-1. `shared/common-models` - Data models (User, Resource, Booking, Payment)
-2. `shared/common-utils` - Utilities (JWT, validation, exceptions)
-3. `shared/event-schemas` - Event definitions (JSON schemas)
+1. `shared/api-contracts` - API contracts/DTOs (UserDTO, ResourceDTO, BookingDTO, PaymentDTO)
+2. `shared/event-schemas` - Event definitions (BookingCreatedEvent, PaymentProcessedEvent)
+3. `shared/common-utils` - Utilities only (JWT, validation, date utilities)
 
 **Dependencies**: None
 
-**Testing**: Unit tests for each utility
+**Key Principle**: Share contracts and utilities, NOT domain models. Each service owns its internal domain models.
+
+**What to Share**:
+- ✅ DTOs for inter-service communication
+- ✅ Event schemas for pub/sub
+- ✅ Common utilities (JWT, validation)
+
+**What NOT to Share**:
+- ❌ Domain entities with business logic
+- ❌ Database entities
+- ❌ Service-specific models
+
+**Testing**: Unit tests for utilities, contract validation tests
 
 #### Step 1.3: Database Setup
 **Order**:
@@ -981,21 +1092,25 @@ git branch feature/user-service
 #### Step 2.1: Auth Service (Week 3)
 **Implementation Order**:
 1. Create Spring Boot project structure
-2. Implement JWT generation/validation
-3. Implement user registration
-4. Implement login/logout
-5. Implement token refresh
-6. Add Redis integration for token blacklist
-7. Create Dockerfile
-8. Create component docker-compose.yml
-9. Write unit tests
-10. Write integration tests
+2. Define internal domain models (User, RefreshToken)
+3. Implement JWT generation/validation using `shared/common-utils`
+4. Implement user registration
+5. Implement login/logout
+6. Implement token refresh
+7. Add Redis integration for token blacklist
+8. Create DTOs for API responses (use `shared/api-contracts`)
+9. Create Dockerfile
+10. Create component docker-compose.yml
+11. Write unit tests
+12. Write integration tests
 
 **Dependencies**:
-- `shared/common-models`
-- `shared/common-utils`
+- `shared/api-contracts` (DTOs only)
+- `shared/common-utils` (JWT utilities)
 - PostgreSQL
 - Redis
+
+**Key Point**: Auth service owns its User domain model. Exposes UserDTO via API contracts.
 
 **Testing**:
 ```bash
@@ -1015,19 +1130,23 @@ docker-compose up -d
 #### Step 2.2: User Service (Week 3)
 **Implementation Order**:
 1. Create Spring Boot project
-2. Implement user profile CRUD
-3. Integrate with Auth Service for authentication
-4. Add caching with Redis
-5. Create Dockerfile
-6. Create component docker-compose.yml
-7. Write tests
+2. Define internal domain models (UserProfile, UserPreferences)
+3. Implement user profile CRUD
+4. Create REST client for Auth Service (uses UserDTO from `shared/api-contracts`)
+5. Integrate with Auth Service for authentication
+6. Add caching with Redis
+7. Create Dockerfile
+8. Create component docker-compose.yml
+9. Write tests
 
 **Dependencies**:
-- `shared/common-models`
-- `shared/common-utils`
-- Auth Service (for token validation)
+- `shared/api-contracts` (DTOs for communication)
+- `shared/common-utils` (utilities)
+- Auth Service (for token validation via API)
 - PostgreSQL
 - Redis
+
+**Key Point**: User service owns its UserProfile model. Communicates with Auth Service via DTOs, not shared domain models.
 
 **Testing**:
 ```bash
@@ -1039,19 +1158,24 @@ docker-compose up -d
 #### Step 2.3: Resource Service (Week 4)
 **Implementation Order**:
 1. Create Spring Boot project
-2. Implement resource CRUD
-3. Implement availability management
-4. Implement resource blocking
-5. Add caching for availability
-6. Create Dockerfile
-7. Create component docker-compose.yml
-8. Write tests
+2. Define internal domain models (Resource, Availability, ResourceType)
+3. Implement resource CRUD
+4. Implement availability management
+5. Implement resource blocking
+6. Add caching for availability
+7. Create DTOs for API responses (use `shared/api-contracts`)
+8. Create Dockerfile
+9. Create component docker-compose.yml
+10. Write tests
 
 **Dependencies**:
-- `shared/common-models`
-- Auth Service
+- `shared/api-contracts` (DTOs)
+- `shared/common-utils` (utilities)
+- Auth Service (via API)
 - PostgreSQL
 - Redis
+
+**Key Point**: Resource service owns its Resource domain model. Exposes ResourceDTO for other services.
 
 **Testing**:
 ```bash
@@ -1063,24 +1187,29 @@ docker-compose up -d
 #### Step 2.4: Booking Service (Week 5)
 **Implementation Order**:
 1. Create Spring Boot project
-2. Implement booking creation with validation
-3. Implement optimistic locking
-4. Integrate with Resource Service
-5. Implement SNS event publishing
-6. Implement booking cancellation
-7. Add event sourcing
-8. Create Dockerfile
-9. Create component docker-compose.yml (with LocalStack)
-10. Write tests
+2. Define internal domain models (Booking, BookingStatus)
+3. Create REST clients for User and Resource services (use DTOs from `shared/api-contracts`)
+4. Implement booking creation with validation
+5. Implement optimistic locking
+6. Integrate with Resource Service via API calls
+7. Implement SNS event publishing (use `shared/event-schemas`)
+8. Implement booking cancellation
+9. Add event sourcing
+10. Create Dockerfile
+11. Create component docker-compose.yml (with LocalStack)
+12. Write tests
 
 **Dependencies**:
-- `shared/common-models`
-- `shared/event-schemas`
-- Auth Service
-- Resource Service
+- `shared/api-contracts` (DTOs for service communication)
+- `shared/event-schemas` (event definitions)
+- `shared/common-utils` (utilities)
+- Auth Service (via API)
+- Resource Service (via API)
 - PostgreSQL
 - Redis
 - LocalStack (SNS/SQS)
+
+**Key Point**: Booking service owns its Booking model. Uses UserDTO and ResourceDTO for validation, stores only IDs (references).
 
 **Testing**:
 ```bash
@@ -1095,22 +1224,27 @@ aws --endpoint-url=http://localhost:4566 sns list-topics
 #### Step 2.5: Payment Service (Week 6)
 **Implementation Order**:
 1. Create Spring Boot project
-2. Implement mock payment processing
-3. Implement payment status tracking
-4. Implement refund logic
-5. Integrate with Booking Service
-6. Implement SNS event publishing
-7. Create Dockerfile
-8. Create component docker-compose.yml
-9. Write tests
+2. Define internal domain models (Payment, PaymentStatus, PaymentMethod)
+3. Create REST client for Booking Service (use DTOs from `shared/api-contracts`)
+4. Implement mock payment processing
+5. Implement payment status tracking
+6. Implement refund logic
+7. Integrate with Booking Service via API
+8. Implement SNS event publishing (use `shared/event-schemas`)
+9. Create Dockerfile
+10. Create component docker-compose.yml
+11. Write tests
 
 **Dependencies**:
-- `shared/common-models`
-- `shared/event-schemas`
-- Auth Service
-- Booking Service
+- `shared/api-contracts` (DTOs)
+- `shared/event-schemas` (events)
+- `shared/common-utils` (utilities)
+- Auth Service (via API)
+- Booking Service (via API)
 - PostgreSQL
 - LocalStack (SNS/SQS)
+
+**Key Point**: Payment service owns its Payment model. References bookings by ID, not full Booking objects.
 
 **Testing**:
 ```bash
@@ -1400,26 +1534,26 @@ terraform apply
 ```mermaid
 graph TB
     subgraph Shared Libraries
-        MODELS[common-models]
+        CONTRACTS[api-contracts - DTOs]
         UTILS[common-utils]
         EVENTS[event-schemas]
     end
 
     subgraph Services - Layer 1
-        AUTH[auth-service]
+        AUTH[auth-service<br/>owns User model]
     end
 
     subgraph Services - Layer 2
-        USER[user-service]
-        RESOURCE[resource-service]
+        USER[user-service<br/>owns UserProfile model]
+        RESOURCE[resource-service<br/>owns Resource model]
     end
 
     subgraph Services - Layer 3
-        BOOKING[booking-service]
+        BOOKING[booking-service<br/>owns Booking model]
     end
 
     subgraph Services - Layer 4
-        PAYMENT[payment-service]
+        PAYMENT[payment-service<br/>owns Payment model]
     end
 
     subgraph Lambdas
@@ -1435,11 +1569,11 @@ graph TB
         AWS[LocalStack/AWS]
     end
 
-    MODELS --> AUTH
-    MODELS --> USER
-    MODELS --> RESOURCE
-    MODELS --> BOOKING
-    MODELS --> PAYMENT
+    CONTRACTS -.->|DTOs only| AUTH
+    CONTRACTS -.->|DTOs only| USER
+    CONTRACTS -.->|DTOs only| RESOURCE
+    CONTRACTS -.->|DTOs only| BOOKING
+    CONTRACTS -.->|DTOs only| PAYMENT
 
     UTILS --> AUTH
     UTILS --> USER
@@ -1451,14 +1585,14 @@ graph TB
     EVENTS --> PAYMENT
     EVENTS --> NOTIF
 
-    AUTH --> USER
-    AUTH --> RESOURCE
-    AUTH --> BOOKING
-    AUTH --> PAYMENT
+    AUTH -->|API calls with DTOs| USER
+    AUTH -->|API calls with DTOs| RESOURCE
+    AUTH -->|API calls with DTOs| BOOKING
+    AUTH -->|API calls with DTOs| PAYMENT
 
-    RESOURCE --> BOOKING
+    RESOURCE -->|API calls with DTOs| BOOKING
 
-    BOOKING --> PAYMENT
+    BOOKING -->|API calls with DTOs| PAYMENT
 
     DB --> AUTH
     DB --> USER
@@ -1489,27 +1623,54 @@ graph TB
 
 ### Key Principles
 1. **Monorepo**: All components in single repository
-2. **Component Isolation**: Each component has its own docker-compose for testing
-3. **Integration Testing**: Root docker-compose for full system testing
-4. **LocalStack First**: Develop without AWS costs
-5. **Terraform for IaC**: Infrastructure as code for all environments
-6. **Gradual AWS Migration**: Deploy to AWS only when components are ready
+2. **Isolated Models (Approach 2)**: Each service owns its domain models
+3. **Shared Contracts**: API contracts (DTOs) and event schemas are shared
+4. **Component Isolation**: Each component has its own docker-compose for testing
+5. **Integration Testing**: Root docker-compose for full system testing
+6. **LocalStack First**: Develop without AWS costs
+7. **Terraform for IaC**: Infrastructure as code for all environments
+8. **Gradual AWS Migration**: Deploy to AWS only when components are ready
+
+### Isolated Model Architecture Benefits
+- ✅ **Service Autonomy**: Each service can evolve its domain model independently
+- ✅ **Clear Boundaries**: Services communicate via DTOs, not shared domain objects
+- ✅ **Type Safety**: Shared contracts prevent integration errors
+- ✅ **Independent Deployment**: Changes to domain models don't cascade
+- ✅ **Bounded Contexts**: Each service has its own domain model reflecting its needs
+
+### What We Share
+1. **API Contracts** (`shared/api-contracts`): DTOs for inter-service communication
+2. **Event Schemas** (`shared/event-schemas`): Event definitions for pub/sub
+3. **Common Utilities** (`shared/common-utils`): JWT, validation, date utilities
+
+### What We DON'T Share
+1. **Domain Models**: Each service owns its entities (User, Booking, Payment, etc.)
+2. **Business Logic**: Service-specific rules and validation
+3. **Database Schemas**: Each service manages its own schema
 
 ### Development Workflow
-1. Develop component in isolation
-2. Test with component docker-compose
-3. Integrate with root docker-compose
-4. Run integration tests
-5. Deploy to AWS (when ready)
+1. Develop component in isolation with its own domain models
+2. Define DTOs in `shared/api-contracts` for API communication
+3. Test with component docker-compose
+4. Integrate with root docker-compose using DTOs
+5. Run integration tests
+6. Deploy to AWS (when ready)
+
+### Communication Pattern
+- **Synchronous**: REST APIs with DTOs from `shared/api-contracts`
+- **Asynchronous**: Events with schemas from `shared/event-schemas`
+- **References**: Services store IDs, not full objects from other services
 
 ### Testing Strategy
-- **Unit Tests**: Each component
+- **Unit Tests**: Each component with its domain models
+- **Contract Tests**: Validate DTOs and API contracts
 - **Integration Tests**: Component docker-compose
 - **E2E Tests**: Root docker-compose
 - **AWS Tests**: After deployment
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: 2026-01-31  
+**Document Version**: 2.0
+**Last Updated**: 2026-03-08
 **Author**: Architecture Team
+**Architecture Approach**: Isolated Models (Approach 2 from shared-vs-isolated-models.md)

@@ -187,6 +187,7 @@ sequenceDiagram
 - `GET /auth/verify` - Verify token validity
 
 **Technology Stack**:
+- Java 21
 - Spring Boot 3.x
 - Spring Security 6.x
 - JWT (jjwt library)
