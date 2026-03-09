@@ -295,7 +295,4 @@ __*
 **/.env
 **/.env.*
 
-agent-playground
-**/agent-playground/
-
 # End of .gitignore

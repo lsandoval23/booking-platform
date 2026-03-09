@@ -1,0 +1,24 @@
+# Docker Environment Configuration
+# This profile is activated when running the service in Docker containers
+# It overrides the default configuration with Docker-specific settings
+
+spring:
+  # Database Configuration for Docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/${DB_NAME:auth_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+  # Redis Configuration for Docker
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: ${REDIS_PASSWORD:}
+
+# Logging Configuration for Docker
+logging:
+  level:
+    root: INFO
+    com.booking.auth: INFO
+    org.springframework.security: INFO

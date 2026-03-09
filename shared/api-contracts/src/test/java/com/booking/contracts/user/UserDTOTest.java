@@ -242,20 +242,22 @@ class UserDTOTest {
     @Test
     void testRefreshTokenResponseCreation() {
         Instant expiresAt = Instant.now().plusSeconds(3600);
-        RefreshTokenResponse response = new RefreshTokenResponse("new-access-token", expiresAt);
+        RefreshTokenResponse response = new RefreshTokenResponse("new-access-token", "new-refresh-token", expiresAt);
         
         assertEquals("new-access-token", response.accessToken());
+        assertEquals("new-refresh-token", response.refreshToken());
         assertEquals(expiresAt, response.expiresAt());
     }
 
     @Test
     void testRefreshTokenResponseJsonSerialization() throws Exception {
         Instant expiresAt = Instant.parse("2024-01-01T01:00:00Z");
-        RefreshTokenResponse response = new RefreshTokenResponse("new-access-token", expiresAt);
+        RefreshTokenResponse response = new RefreshTokenResponse("new-access-token", "new-refresh-token", expiresAt);
         
         String json = objectMapper.writeValueAsString(response);
         
         assertTrue(json.contains("new-access-token"));
+        assertTrue(json.contains("new-refresh-token"));
         assertTrue(json.contains("2024-01-01T01:00:00Z"));
     }
 
